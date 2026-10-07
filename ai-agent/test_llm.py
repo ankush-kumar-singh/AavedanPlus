@@ -1,4 +1,7 @@
+import os
+
 from app.graph import agent
+from app.tools.documents import validate_uploaded_files
 
 
 def run_test(name, state):
@@ -133,6 +136,81 @@ run_test(
         "user_message": "I want to apply for a driving licence.",
         "uploaded_documents": [],
         "consent_granted": True,
+        "mock_portal_mode": "success",
+        "completed_steps": []
+    }
+)
+
+
+run_test(
+    "TEST 7 - Consent Required",
+    {
+        "user_id": "user_consent_001",
+        "service": "income_certificate",
+        "user_message": "I want to apply for an income certificate.",
+        "uploaded_documents": [
+            "Aadhaar Card",
+            "Salary Slip",
+            "Self Declaration"
+        ],
+        "consent_granted": False,
+        "mock_portal_mode": "success",
+        "completed_steps": []
+    }
+)
+
+
+print("\n" + "=" * 60)
+print("TEST 8 - ACTUAL PDF DOCUMENT VALIDATION")
+print("=" * 60)
+
+documents_folder = os.path.join(
+    os.path.dirname(__file__),
+    "documents",
+    "income_certificate"
+)
+
+pdf_files = [
+    os.path.join(documents_folder, "DEMO_Aadhaar.pdf"),
+    os.path.join(documents_folder, "DEMO_Salary_Slip.pdf"),
+    os.path.join(documents_folder, "DEMO_Self_Declaration.pdf")
+]
+
+pdf_validation = validate_uploaded_files(pdf_files)
+
+print("\nDetected Documents:")
+
+uploaded_document_types = []
+
+for document in pdf_validation["detected_documents"]:
+    print(
+        f"VALID | {document['file']} "
+        f"-> {document['document_type']}"
+    )
+
+    uploaded_document_types.append(
+        document["document_type"]
+    )
+
+print("\nInvalid Documents:")
+
+for document in pdf_validation["invalid_documents"]:
+    print(
+        f"INVALID | {document['file']} "
+        f"-> {document['error']}"
+    )
+
+
+print("\nRunning Agent With Detected Documents...")
+
+run_test(
+    "TEST 8A - Income Certificate With Real PDFs",
+    {
+        "user_id": "user_pdf_001",
+        "service": "income_certificate",
+        "user_message": "I want to apply for an income certificate.",
+        "uploaded_documents": uploaded_document_types,
+        "consent_granted": False,
         "mock_portal_mode": "success",
         "completed_steps": []
     }

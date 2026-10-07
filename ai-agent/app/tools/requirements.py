@@ -274,7 +274,8 @@ SERVICE_REQUIREMENTS = {
                 "accepted_documents": [
                     "caste_certificate",
                     "ews_certificate"
-                ]
+                ],
+                "required": False
             }
         ]
     }

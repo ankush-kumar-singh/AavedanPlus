@@ -1,3 +1,10 @@
+import os
+
+import fitz
+import pytesseract
+from PIL import Image
+
+
 DOCUMENT_ALIASES = {
     "aadhaar": [
         "aadhaar",
@@ -175,10 +182,165 @@ def normalize_document_type(document: str) -> str:
     return normalized.replace(" ", "_")
 
 
+def extract_pdf_text(pdf_path: str) -> str:
+    text = ""
+
+    document = fitz.open(pdf_path)
+
+    for page in document:
+        text += page.get_text()
+
+    document.close()
+
+    return text.strip()
+
+
+def extract_pdf_text_with_ocr(pdf_path: str) -> str:
+    text = extract_pdf_text(pdf_path)
+
+    if text:
+        return text
+
+    document = fitz.open(pdf_path)
+
+    ocr_text = []
+
+    for page in document:
+        pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+        image = Image.frombytes(
+            "RGB",
+            [pixmap.width, pixmap.height],
+            pixmap.samples
+        )
+
+        ocr_text.append(
+            pytesseract.image_to_string(image)
+        )
+
+    document.close()
+
+    return "\n".join(ocr_text).strip()
+
+
+def detect_document_type_from_text(text: str) -> str:
+    normalized_text = normalize_text(text)
+
+    matches = []
+
+    for document_type, aliases in DOCUMENT_ALIASES.items():
+        for alias in aliases:
+            normalized_alias = normalize_text(alias)
+
+            if normalized_alias in normalized_text:
+                matches.append(document_type)
+                break
+
+    if not matches:
+        return "unknown"
+
+    priority = [
+        "aadhaar",
+        "salary_slip",
+        "self_declaration",
+        "affidavit",
+        "income_certificate",
+        "caste_certificate",
+        "ews_certificate",
+        "residence_certificate",
+        "domicile_certificate",
+        "electricity_bill",
+        "water_bill",
+        "voter_id",
+        "pan",
+        "passport",
+        "driving_license",
+        "ration_card",
+        "marksheet",
+        "bank_passbook",
+        "bank_statement",
+        "land_record"
+    ]
+
+    for document_type in priority:
+        if document_type in matches:
+            return document_type
+
+    return matches[0]
+
+
+def validate_pdf_document(pdf_path: str) -> dict:
+    if not os.path.exists(pdf_path):
+        return {
+            "valid": False,
+            "document_type": "unknown",
+            "file": os.path.basename(pdf_path),
+            "error": "File not found."
+        }
+
+    try:
+        extracted_text = extract_pdf_text_with_ocr(pdf_path)
+
+        if not extracted_text:
+            return {
+                "valid": False,
+                "document_type": "unknown",
+                "file": os.path.basename(pdf_path),
+                "error": "No readable text found in document."
+            }
+
+        document_type = detect_document_type_from_text(
+            extracted_text
+        )
+
+        if document_type == "unknown":
+            return {
+                "valid": False,
+                "document_type": "unknown",
+                "file": os.path.basename(pdf_path),
+                "error": "Document type could not be identified."
+            }
+
+        return {
+            "valid": True,
+            "document_type": document_type,
+            "file": os.path.basename(pdf_path),
+            "text_preview": extracted_text[:500],
+            "error": None
+        }
+
+    except Exception as error:
+        return {
+            "valid": False,
+            "document_type": "unknown",
+            "file": os.path.basename(pdf_path),
+            "error": str(error)
+        }
+
+
+def validate_uploaded_files(file_paths: list) -> dict:
+    detected_documents = []
+    invalid_documents = []
+
+    for file_path in file_paths:
+        result = validate_pdf_document(file_path)
+
+        if result["valid"]:
+            detected_documents.append(result)
+        else:
+            invalid_documents.append(result)
+
+    return {
+        "detected_documents": detected_documents,
+        "invalid_documents": invalid_documents,
+        "all_readable": len(invalid_documents) == 0
+    }
+
+
 def validate_documents(
     required_documents: list,
     uploaded_documents: list
 ) -> dict:
+
     uploaded_types = {
         normalize_document_type(document)
         for document in uploaded_documents
@@ -186,10 +348,12 @@ def validate_documents(
 
     matched_documents = {}
     missing_requirements = []
+    missing_optional_requirements = []
 
     for requirement in required_documents:
         requirement_key = requirement["key"]
         accepted_documents = requirement["accepted_documents"]
+        is_required = requirement.get("required", True)
 
         matched = None
 
@@ -204,10 +368,19 @@ def validate_documents(
             matched_documents[requirement_key] = {
                 "label": requirement["label"],
                 "document": matched,
-                "status": "VALID"
+                "status": "VALID",
+                "required": is_required
             }
-        else:
+
+        elif is_required:
             missing_requirements.append({
+                "key": requirement_key,
+                "label": requirement["label"],
+                "accepted_documents": accepted_documents
+            })
+
+        else:
+            missing_optional_requirements.append({
                 "key": requirement_key,
                 "label": requirement["label"],
                 "accepted_documents": accepted_documents
@@ -216,5 +389,6 @@ def validate_documents(
     return {
         "matched_documents": matched_documents,
         "missing_documents": missing_requirements,
+        "missing_optional_documents": missing_optional_requirements,
         "all_valid": len(missing_requirements) == 0
     }

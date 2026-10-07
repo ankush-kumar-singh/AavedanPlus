@@ -1,0 +1,38 @@
+[
+    {
+        "application_id": "INC-2026-000001",
+        "service": "income_certificate",
+        "service_name": "Income Certificate",
+        "applicant_name": "RAHUL KUMAR",
+        "submitted_at": "2026-10-07T21:43:47.259513",
+        "status": "APPROVED",
+        "status_history": [
+            {
+                "status": "SUBMITTED",
+                "timestamp": "2026-10-07T21:43:47.259517"
+            },
+            {
+                "status": "UNDER_REVIEW",
+                "timestamp": "2026-10-07T21:47:06.582322"
+            },
+            {
+                "status": "APPROVED",
+                "timestamp": "2026-10-07T21:47:34.390533"
+            }
+        ]
+    },
+    {
+        "application_id": "INC-2026-000002",
+        "service": "income_certificate",
+        "service_name": "Income Certificate",
+        "applicant_name": "RAHUL KUMAR",
+        "submitted_at": "2026-10-07T21:52:43.759299",
+        "status": "SUBMITTED",
+        "status_history": [
+            {
+                "status": "SUBMITTED",
+                "timestamp": "2026-10-07T21:52:43.759310"
+            }
+        ]
+    }
+]

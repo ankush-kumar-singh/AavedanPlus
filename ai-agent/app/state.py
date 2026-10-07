@@ -13,7 +13,10 @@ class AgentState(TypedDict, total=False):
 
     required_documents: list
     uploaded_documents: list
+    uploaded_file_paths: list
     validated_documents: dict
+
+    extracted_data: dict
 
     form_data: dict
     user_details: dict
@@ -33,5 +36,7 @@ class AgentState(TypedDict, total=False):
     escalation_reason: str
 
     mock_portal_mode: str
+
+    audit_log: list
 
     response: str

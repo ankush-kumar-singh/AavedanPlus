@@ -13,16 +13,30 @@ from app.tools.requirements import (
 )
 from app.tools.documents import validate_documents
 from app.tools.submission import submit_application
+from app.tools.forms import fill_form as build_form
+from app.tools.document_extractor import (
+    extract_data_from_documents
+)
 
 
 MAX_RETRIES = 2
 
 
-def clean_llm_response(response: str) -> str:
+def clean_llm_response(
+    response: str
+) -> str:
+
     response = response.strip()
 
-    if "<think>" in response and "</think>" in response:
-        response = response.split("</think>", 1)[1].strip()
+    if (
+        "<think>" in response
+        and "</think>" in response
+    ):
+
+        response = response.split(
+            "</think>",
+            1
+        )[1].strip()
 
     return response
 
@@ -33,10 +47,19 @@ def generate_natural_response(
 ) -> str:
 
     state_summary = {
-        "service": state.get("service"),
-        "service_name": state.get("service_name"),
-        "current_step": state.get("current_step"),
-        "required_documents": state.get("required_documents", []),
+        "service": state.get(
+            "service"
+        ),
+        "service_name": state.get(
+            "service_name"
+        ),
+        "current_step": state.get(
+            "current_step"
+        ),
+        "required_documents": state.get(
+            "required_documents",
+            []
+        ),
         "validated_documents": state.get(
             "validated_documents",
             {}
@@ -80,7 +103,10 @@ def generate_natural_response(
 
 {CONVERSATION_PROMPT.format(
     state=state_summary,
-    user_message=state.get("user_message", "")
+    user_message=state.get(
+        "user_message",
+        ""
+    )
 )}
 
 If the verified state is insufficient to safely generate a response,
@@ -90,7 +116,10 @@ use this fallback message:
 """
 
     try:
-        response = llm.invoke(prompt)
+
+        response = llm.invoke(
+            prompt
+        )
 
         content = clean_llm_response(
             response.content
@@ -105,26 +134,40 @@ use this fallback message:
     return fallback
 
 
-def understand_request(state: AgentState):
+def understand_request(
+    state: AgentState
+):
 
-    if state.get("service"):
-        service = state["service"]
+    if state.get(
+        "service"
+    ):
+
+        service = state[
+            "service"
+        ]
 
         if service in get_supported_services():
+
             return {
                 "service": service,
-                "service_name": get_service_name(service),
-                "current_step": "SERVICE_IDENTIFIED",
+                "service_name": get_service_name(
+                    service
+                ),
+                "current_step":
+                    "SERVICE_IDENTIFIED",
                 "completed_steps": [
                     "UNDERSTAND_REQUEST"
                 ]
             }
 
-    user_message = state["user_message"]
+    user_message = state[
+        "user_message"
+    ]
 
     supported_services = "\n".join(
         f"- {service_id}: {name}"
-        for service_id, name in get_supported_services().items()
+        for service_id, name
+        in get_supported_services().items()
     )
 
     prompt = f"""
@@ -148,23 +191,31 @@ unknown
 """
 
     try:
-        response = llm.invoke(prompt)
+
+        response = llm.invoke(
+            prompt
+        )
 
         service = clean_llm_response(
             response.content
         ).lower()
 
     except Exception:
+
         service = "unknown"
 
     for service_id in get_supported_services():
+
         if service_id in service:
+
             return {
                 "service": service_id,
-                "service_name": get_service_name(
-                    service_id
-                ),
-                "current_step": "SERVICE_IDENTIFIED",
+                "service_name":
+                    get_service_name(
+                        service_id
+                    ),
+                "current_step":
+                    "SERVICE_IDENTIFIED",
                 "completed_steps": [
                     "UNDERSTAND_REQUEST"
                 ]
@@ -173,40 +224,59 @@ unknown
     return {
         "service": "unknown",
         "service_name": "Unknown Service",
-        "current_step": "SERVICE_NOT_SUPPORTED",
+        "current_step":
+            "SERVICE_NOT_SUPPORTED",
         "completed_steps": [
             "UNDERSTAND_REQUEST"
         ]
     }
 
 
-def route_after_understanding(state: AgentState):
+def route_after_understanding(
+    state: AgentState
+):
 
-    if state.get("service") == "unknown":
+    if state.get(
+        "service"
+    ) == "unknown":
+
         return "unsupported"
 
     return "continue"
 
 
-def get_requirements(state: AgentState):
+def get_requirements(
+    state: AgentState
+):
 
-    service = state["service"]
+    service = state[
+        "service"
+    ]
 
     required_documents = check_requirements(
         service
     )
 
     return {
-        "required_documents": required_documents,
-        "current_step": "DOCUMENTS_PENDING",
+        "required_documents":
+            required_documents,
+        "current_step":
+            "DOCUMENTS_PENDING",
         "completed_steps": (
-            state.get("completed_steps", [])
-            + ["CHECK_REQUIREMENTS"]
+            state.get(
+                "completed_steps",
+                []
+            )
+            + [
+                "CHECK_REQUIREMENTS"
+            ]
         )
     }
 
 
-def validate_documents_node(state: AgentState):
+def validate_documents_node(
+    state: AgentState
+):
 
     required_documents = state.get(
         "required_documents",
@@ -223,95 +293,188 @@ def validate_documents_node(state: AgentState):
         uploaded_documents
     )
 
-    if validation["all_valid"]:
-        current_step = "FORM_READY"
+    if validation[
+        "all_valid"
+    ]:
+
+        current_step = (
+            "FORM_READY"
+        )
 
     else:
-        current_step = "DOCUMENTS_PENDING"
+
+        current_step = (
+            "DOCUMENTS_PENDING"
+        )
 
     return {
-        "validated_documents": validation,
-        "current_step": current_step,
+        "validated_documents":
+            validation,
+        "current_step":
+            current_step,
         "completed_steps": (
-            state.get("completed_steps", [])
-            + ["VALIDATE_DOCUMENTS"]
+            state.get(
+                "completed_steps",
+                []
+            )
+            + [
+                "VALIDATE_DOCUMENTS"
+            ]
         )
     }
 
 
-def route_after_validation(state: AgentState):
+def route_after_validation(
+    state: AgentState
+):
 
-    if state.get("current_step") == "FORM_READY":
+    if state.get(
+        "current_step"
+    ) == "FORM_READY":
+
         return "continue"
 
     return "waiting"
 
 
-def fill_form(state: AgentState):
+def extract_document_data_node(
+    state: AgentState
+):
 
-    service = state["service"]
-
-    service_name = state.get(
-        "service_name",
-        get_service_name(service)
+    uploaded_file_paths = state.get(
+        "uploaded_file_paths",
+        []
     )
 
-    user_details = state.get(
-        "user_details",
-        {}
-    )
+    if not uploaded_file_paths:
 
-    form_data = {
-        "service_id": service,
-        "service": service_name,
-        **user_details
-    }
+        return {
+            "extracted_data": {}
+        }
+
+    extracted_data = (
+        extract_data_from_documents(
+            uploaded_file_paths
+        )
+    )
 
     return {
-        "form_data": form_data,
-        "current_step": "FORM_FILLED",
+        "extracted_data":
+            extracted_data,
+        "current_step":
+            "DATA_EXTRACTED",
         "completed_steps": (
-            state.get("completed_steps", [])
-            + ["FILL_FORM"]
+            state.get(
+                "completed_steps",
+                []
+            )
+            + [
+                "EXTRACT_DOCUMENT_DATA"
+            ]
         )
     }
 
 
-def request_consent(state: AgentState):
+def fill_form(
+    state: AgentState
+):
 
-    if state.get("consent_granted") is True:
+    service = state[
+        "service"
+    ]
+
+    extracted_data = state.get(
+        "extracted_data",
+        {}
+    )
+
+    form_data = build_form(
+        service,
+        extracted_data
+    )
+
+    return {
+        "form_data":
+            form_data,
+        "current_step":
+            "FORM_FILLED",
+        "completed_steps": (
+            state.get(
+                "completed_steps",
+                []
+            )
+            + [
+                "FILL_FORM"
+            ]
+        )
+    }
+
+
+def request_consent(
+    state: AgentState
+):
+
+    if state.get(
+        "consent_granted"
+    ) is True:
+
         return {
-            "current_step": "SUBMITTING",
+            "current_step":
+                "SUBMITTING",
             "completed_steps": (
-                state.get("completed_steps", [])
-                + ["CONSENT_GRANTED"]
+                state.get(
+                    "completed_steps",
+                    []
+                )
+                + [
+                    "CONSENT_GRANTED"
+                ]
             )
         }
 
     return {
-        "consent_required": True,
-        "consent_action": "SUBMIT_APPLICATION",
-        "consent_granted": False,
-        "current_step": "WAITING_CONSENT",
+        "consent_required":
+            True,
+        "consent_action":
+            "SUBMIT_APPLICATION",
+        "consent_granted":
+            False,
+        "current_step":
+            "WAITING_CONSENT",
         "completed_steps": (
-            state.get("completed_steps", [])
-            + ["CONSENT_REQUESTED"]
+            state.get(
+                "completed_steps",
+                []
+            )
+            + [
+                "CONSENT_REQUESTED"
+            ]
         )
     }
 
 
-def route_after_consent(state: AgentState):
+def route_after_consent(
+    state: AgentState
+):
 
-    if state.get("consent_granted") is True:
+    if state.get(
+        "consent_granted"
+    ) is True:
+
         return "submit"
 
     return "wait"
 
 
-def submit_to_portal(state: AgentState):
+def submit_to_portal(
+    state: AgentState
+):
 
     attempt = (
-        state.get("submission_attempts", 0)
+        state.get(
+            "submission_attempts",
+            0
+        )
         + 1
     )
 
@@ -321,43 +484,72 @@ def submit_to_portal(state: AgentState):
     )
 
     result = submit_application(
-        state["form_data"],
+        state[
+            "form_data"
+        ],
         attempt,
         mode
     )
 
-    if result["success"]:
+    if result[
+        "success"
+    ]:
 
         return {
-            "application_id": result[
-                "application_id"
-            ],
-            "application_status": "SUBMITTED",
-            "submission_attempts": attempt,
-            "current_step": "SUBMITTED",
+            "application_id":
+                result[
+                    "application_id"
+                ],
+            "application_status":
+                "SUBMITTED",
+            "submission_attempts":
+                attempt,
+            "current_step":
+                "SUBMITTED",
             "completed_steps": (
-                state.get("completed_steps", [])
-                + ["SUBMISSION_SUCCESS"]
+                state.get(
+                    "completed_steps",
+                    []
+                )
+                + [
+                    "SUBMISSION_SUCCESS"
+                ]
             )
         }
 
     return {
-        "submission_attempts": attempt,
+        "submission_attempts":
+            attempt,
         "retry_count": (
-            state.get("retry_count", 0)
+            state.get(
+                "retry_count",
+                0
+            )
             + 1
         ),
-        "last_error": result["error"],
-        "application_status": "FAILED",
-        "current_step": "RETRYING",
+        "last_error":
+            result[
+                "error"
+            ],
+        "application_status":
+            "FAILED",
+        "current_step":
+            "RETRYING",
         "completed_steps": (
-            state.get("completed_steps", [])
-            + ["SUBMISSION_FAILED"]
+            state.get(
+                "completed_steps",
+                []
+            )
+            + [
+                "SUBMISSION_FAILED"
+            ]
         )
     }
 
 
-def handle_retry(state: AgentState):
+def handle_retry(
+    state: AgentState
+):
 
     retry_count = state.get(
         "retry_count",
@@ -365,61 +557,92 @@ def handle_retry(state: AgentState):
     )
 
     if retry_count <= MAX_RETRIES:
+
         return {
-            "current_step": "SUBMITTING"
+            "current_step":
+                "SUBMITTING"
         }
 
     return {
-        "escalated": True,
-        "escalation_reason": state.get(
-            "last_error",
-            "Application submission failed repeatedly."
-        ),
-        "current_step": "HUMAN_ESCALATION",
-        "application_status": "HUMAN_ESCALATION",
+        "escalated":
+            True,
+        "escalation_reason":
+            state.get(
+                "last_error",
+                "Application submission failed repeatedly."
+            ),
+        "current_step":
+            "HUMAN_ESCALATION",
+        "application_status":
+            "HUMAN_ESCALATION",
         "completed_steps": (
-            state.get("completed_steps", [])
-            + ["HUMAN_ESCALATION"]
+            state.get(
+                "completed_steps",
+                []
+            )
+            + [
+                "HUMAN_ESCALATION"
+            ]
         )
     }
 
 
-def route_after_submission(state: AgentState):
+def route_after_submission(
+    state: AgentState
+):
 
-    if state.get("current_step") == "SUBMITTED":
+    if state.get(
+        "current_step"
+    ) == "SUBMITTED":
+
         return "done"
 
     return "retry"
 
 
-def route_after_retry(state: AgentState):
+def route_after_retry(
+    state: AgentState
+):
 
-    if state.get("current_step") == "HUMAN_ESCALATION":
+    if state.get(
+        "current_step"
+    ) == "HUMAN_ESCALATION":
+
         return "escalate"
 
     return "submit"
 
 
-def generate_response(state: AgentState):
+def generate_response(
+    state: AgentState
+):
 
     current_step = state.get(
         "current_step"
     )
 
-    if current_step == "SERVICE_NOT_SUPPORTED":
+    if current_step == (
+        "SERVICE_NOT_SUPPORTED"
+    ):
 
         fallback = (
-            "I'm sorry, but I don't currently support "
-            "that government service. I can currently "
-            "help with Income Certificate, Caste Certificate, "
-            "Residence/Domicile Certificate, EWS Certificate, "
-            "Birth Certificate, and Scholarship applications."
+            "I'm sorry, but I don't currently "
+            "support that government service. "
+            "I can currently help with Income "
+            "Certificate, Caste Certificate, "
+            "Residence/Domicile Certificate, "
+            "EWS Certificate, Birth Certificate, "
+            "and Scholarship applications."
         )
 
-    elif current_step == "DOCUMENTS_PENDING":
+    elif current_step == (
+        "DOCUMENTS_PENDING"
+    ):
 
         missing = [
-            item["label"]
+            item[
+                "label"
+            ]
             for item in state.get(
                 "validated_documents",
                 {}
@@ -430,57 +653,72 @@ def generate_response(state: AgentState):
         ]
 
         if missing:
+
             fallback = (
                 "Your application is not ready yet. "
                 "I still need: "
-                + ", ".join(missing)
+                + ", ".join(
+                    missing
+                )
                 + "."
             )
+
         else:
+
             fallback = (
-                "I still need some required documents "
-                "before we can continue."
+                "I still need some required "
+                "documents before we can continue."
             )
 
-    elif current_step == "WAITING_CONSENT":
+    elif current_step == (
+        "WAITING_CONSENT"
+    ):
 
         fallback = (
-            f"I've checked your documents for the "
-            f"{state.get('service_name', 'application')}. "
+            f"I've checked your documents for "
+            f"the {state.get('service_name', 'application')}. "
             "All required documents are available. "
             "Your application is ready for submission. "
             "Would you like me to submit it?"
         )
 
-    elif current_step == "SUBMITTED":
+    elif current_step == (
+        "SUBMITTED"
+    ):
 
         fallback = (
-            f"Your {state.get('service_name', 'application')} "
+            f"Your "
+            f"{state.get('service_name', 'application')} "
             "has been submitted successfully. "
             f"Your application ID is "
             f"{state.get('application_id')}."
         )
 
-    elif current_step == "RETRYING":
+    elif current_step == (
+        "RETRYING"
+    ):
 
         fallback = (
-            "The government portal is temporarily unavailable. "
-            "I'll retry the submission automatically."
+            "The government portal is temporarily "
+            "unavailable. I'll retry the submission "
+            "automatically."
         )
 
-    elif current_step == "HUMAN_ESCALATION":
+    elif current_step == (
+        "HUMAN_ESCALATION"
+    ):
 
         fallback = (
-            "I couldn't complete the submission after "
-            "multiple attempts. I'm escalating this "
-            "application to a human helper."
+            "I couldn't complete the submission "
+            "after multiple attempts. I'm escalating "
+            "this application to a human helper."
         )
 
     else:
 
         fallback = (
-            "I've processed your request and I'm ready "
-            "to continue with your application."
+            "I've processed your request and I'm "
+            "ready to continue with your application."
         )
 
     response = generate_natural_response(
@@ -489,11 +727,15 @@ def generate_response(state: AgentState):
     )
 
     return {
-        "response": response
+        "response":
+            response
     }
 
 
-workflow = StateGraph(AgentState)
+workflow = StateGraph(
+    AgentState
+)
+
 
 workflow.add_node(
     "understand_request",
@@ -508,6 +750,11 @@ workflow.add_node(
 workflow.add_node(
     "validate_documents",
     validate_documents_node
+)
+
+workflow.add_node(
+    "extract_document_data",
+    extract_document_data_node
 )
 
 workflow.add_node(
@@ -546,8 +793,10 @@ workflow.add_conditional_edges(
     "understand_request",
     route_after_understanding,
     {
-        "continue": "get_requirements",
-        "unsupported": "generate_response"
+        "continue":
+            "get_requirements",
+        "unsupported":
+            "generate_response"
     }
 )
 
@@ -562,9 +811,17 @@ workflow.add_conditional_edges(
     "validate_documents",
     route_after_validation,
     {
-        "continue": "fill_form",
-        "waiting": "generate_response"
+        "continue":
+            "extract_document_data",
+        "waiting":
+            "generate_response"
     }
+)
+
+
+workflow.add_edge(
+    "extract_document_data",
+    "fill_form"
 )
 
 
@@ -578,8 +835,10 @@ workflow.add_conditional_edges(
     "request_consent",
     route_after_consent,
     {
-        "submit": "submit_to_portal",
-        "wait": "generate_response"
+        "submit":
+            "submit_to_portal",
+        "wait":
+            "generate_response"
     }
 )
 
@@ -588,8 +847,10 @@ workflow.add_conditional_edges(
     "submit_to_portal",
     route_after_submission,
     {
-        "done": "generate_response",
-        "retry": "handle_retry"
+        "done":
+            "generate_response",
+        "retry":
+            "handle_retry"
     }
 )
 
@@ -598,8 +859,10 @@ workflow.add_conditional_edges(
     "handle_retry",
     route_after_retry,
     {
-        "submit": "submit_to_portal",
-        "escalate": "generate_response"
+        "submit":
+            "submit_to_portal",
+        "escalate":
+            "generate_response"
     }
 )
 

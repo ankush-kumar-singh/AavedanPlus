@@ -1,6 +1,10 @@
-import json
-import os
 from datetime import datetime
+from app.tools.record_store import (
+    APPLICATION_DB,
+    RECORDS_LOCK as SUBMISSION_LOCK,
+    load_application_records,
+    save_application_records,
+)
 
 
 SERVICE_PREFIXES = {
@@ -13,12 +17,9 @@ SERVICE_PREFIXES = {
 }
 
 
-APPLICATION_DB = "application_records.json"
-
-
 def generate_application_id(
     service: str,
-    attempt: int
+    sequence: int
 ) -> str:
 
     prefix = SERVICE_PREFIXES.get(
@@ -28,57 +29,42 @@ def generate_application_id(
 
     year = datetime.now().year
 
-    return f"{prefix}-{year}-{attempt:06d}"
+    return f"{prefix}-{year}-{sequence:06d}"
 
 
-def load_application_records() -> list:
+def save_successful_submission(
+    form_data: dict,
+    service: str
+) -> str:
+    """Allocate and persist a unique ID for this mock portal process."""
+    with SUBMISSION_LOCK:
+        records = load_application_records()
+        year = datetime.now().year
+        used_sequences = []
 
-    if not os.path.exists(
-        APPLICATION_DB
-    ):
-        return []
+        for record in records:
+            record_id = record.get("application_id", "")
+            parts = record_id.split("-")
+            if len(parts) == 3 and parts[1] == str(year):
+                try:
+                    used_sequences.append(int(parts[2]))
+                except ValueError:
+                    continue
 
-    try:
-
-        with open(
-            APPLICATION_DB,
-            "r",
-            encoding="utf-8"
-        ) as file:
-
-            records = json.load(
-                file
-            )
-
-            if isinstance(
-                records,
-                list
-            ):
-
-                return records
-
-    except Exception:
-        pass
-
-    return []
-
-
-def save_application_records(
-    records: list
-):
-
-    with open(
-        APPLICATION_DB,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            records,
-            file,
-            indent=4,
-            ensure_ascii=False
+        application_id = generate_application_id(
+            service,
+            max(used_sequences, default=0) + 1
         )
+        records.append(
+            create_application_record(
+                application_id,
+                form_data,
+                "SUBMITTED"
+            )
+        )
+        save_application_records(records)
+
+    return application_id
 
 
 def create_application_record(
@@ -155,7 +141,7 @@ def submit_application(
     mode: str = "success"
 ) -> dict:
 
-    """Simulate submission to a government portal."""
+    """Save or simulate failure for a local demo submission record."""
 
     service = form_data.get(
         "service",
@@ -166,28 +152,14 @@ def submit_application(
     )
 
     if mode == "success":
-
-        application_id = (
-            generate_application_id(
-                service,
-                attempt
-            )
-        )
-
-        record = create_application_record(
-            application_id,
+        application_id = save_successful_submission(
             form_data,
-            "SUBMITTED"
+            service
         )
-
-        records = load_application_records()
-
-        records.append(
-            record
-        )
-
-        save_application_records(
-            records
+        record = next(
+            (item for item in load_application_records()
+             if item.get("application_id") == application_id),
+            {},
         )
 
         return {
@@ -196,8 +168,10 @@ def submit_application(
                 application_id,
             "status":
                 "SUBMITTED",
+            "submitted_at":
+                record.get("submitted_at"),
             "message":
-                "Application submitted successfully."
+                "Local demo record saved successfully."
         }
 
     if mode == "fail_once":
@@ -209,30 +183,17 @@ def submit_application(
                 "status":
                     "FAILED",
                 "error":
-                    "Government portal temporarily unavailable."
+                    "The local demo portal simulated a temporary failure."
             }
 
-        application_id = (
-            generate_application_id(
-                service,
-                attempt
-            )
-        )
-
-        record = create_application_record(
-            application_id,
+        application_id = save_successful_submission(
             form_data,
-            "SUBMITTED"
+            service
         )
-
-        records = load_application_records()
-
-        records.append(
-            record
-        )
-
-        save_application_records(
-            records
+        record = next(
+            (item for item in load_application_records()
+             if item.get("application_id") == application_id),
+            {},
         )
 
         return {
@@ -241,8 +202,10 @@ def submit_application(
                 application_id,
             "status":
                 "SUBMITTED",
+            "submitted_at":
+                record.get("submitted_at"),
             "message":
-                "Application submitted successfully after retry."
+                "Local demo record saved successfully after retry."
         }
 
     if mode == "always_fail":
@@ -252,7 +215,7 @@ def submit_application(
             "status":
                 "FAILED",
             "error":
-                "Government portal is unavailable."
+                "The local demo portal is unavailable."
         }
 
     return {
@@ -260,5 +223,5 @@ def submit_application(
         "status":
             "FAILED",
         "error":
-            "Unknown portal error."
+            "Unknown local demo portal error."
     }

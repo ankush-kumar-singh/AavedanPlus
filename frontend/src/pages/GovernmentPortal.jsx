@@ -1,151 +1,153 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import {
-  Building2,
-  CheckCircle2,
-  FileText,
-  Shield,
+  ArrowLeft,
   ArrowRight,
-  Loader2,
+  CheckCircle2,
+  Download,
+  FileText,
+  ShieldCheck,
 } from 'lucide-react';
-import { useApplication } from '../context/ApplicationContext';
-import { statusAPI } from '../services/api';
+import { useApplication } from '../context/useApplication';
 
 function GovernmentPortal() {
   const navigate = useNavigate();
-  const { application, backendResponse } = useApplication();
-  const [record, setRecord] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const applicationId =
-    application?.id || backendResponse?.application_id || '';
+  const { application, documents, appStatus, isRestoring } = useApplication();
+  const canShowReceipt = appStatus === 'SUBMITTED' && Boolean(application?.id);
+  const fields = application?.formData?.fields || {};
+  const applicantName =
+    fields.applicant_name?.value ||
+    fields.student_name?.value ||
+    fields.child_name?.value ||
+    application?.applicant?.name ||
+    'Not available';
 
   useEffect(() => {
-    let active = true;
+    if (!isRestoring && !canShowReceipt) navigate('/agent', { replace: true });
+  }, [canShowReceipt, isRestoring, navigate]);
 
-    const load = async () => {
-      if (!applicationId) {
-        setLoading(false);
-        return;
-      }
+  if (isRestoring || !canShowReceipt) return null;
 
-      try {
-        const response = await statusAPI.get(applicationId);
-        if (active) setRecord(response.data);
-      } catch {
-        if (active) setRecord(null);
-      } finally {
-        if (active) setLoading(false);
-      }
+  const downloadReceipt = () => {
+    const receipt = {
+      type: 'Aavedan+ demo submission acknowledgement',
+      application_id: application.id,
+      service: application.service,
+      applicant_name: applicantName,
+      status: 'SUBMITTED_TO_DEMO_PORTAL',
+      submitted_at: application.submittedAt || null,
+      documents: documents.map(({ filename, document_type }) => ({
+        filename,
+        document_type,
+      })),
+      notice: 'This is a prototype acknowledgement. No information was sent to a real government portal.',
     };
-
-    load();
-    return () => {
-      active = false;
-    };
-  }, [applicationId]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#f4f6f9] flex items-center justify-center">
-        <Loader2 className="animate-spin text-blue-600" size={36} />
-      </div>
-    );
-  }
-
-  const serviceName =
-    record?.service_name ||
-    application?.service ||
-    backendResponse?.service_name ||
-    'Government Service';
-
-  const applicantName = record?.applicant_name || 'Applicant';
-  const status = record?.status || backendResponse?.application_status || 'SUBMITTED';
+    const blob = new Blob([JSON.stringify(receipt, null, 2)], {
+      type: 'application/json',
+    });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `${application.id}-demo-receipt.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+  };
 
   return (
-    <div className="min-h-screen bg-[#f4f6f9]">
-      <header className="bg-[#0b3d91] text-white shadow-md">
-        <div className="max-w-5xl mx-auto px-6 py-5 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
-            <Building2 size={22} />
+    <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-800 sm:px-6">
+      <div className="mx-auto max-w-3xl">
+        <header className="mb-6 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-xl bg-blue-100 p-3 text-blue-800">
+            <ShieldCheck size={24} />
           </div>
           <div>
-            <h1 className="text-lg font-bold">Mock Government Portal</h1>
-            <p className="text-xs text-blue-100">Aavedan+ demonstration environment</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Aavedan+ prototype</p>
+            <h1 className="text-xl font-bold text-slate-900">Demo submission acknowledgement</h1>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-green-50 border border-green-200 rounded-2xl p-6 mb-6 flex gap-4"
-        >
-          <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-            <CheckCircle2 className="text-green-600" size={28} />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-green-900">Application submitted</h2>
-            <p className="text-sm text-green-700 mt-1">
-              The submission was confirmed by the Aavedan+ backend.
-            </p>
-          </div>
-        </motion.div>
-
-        <div className="bg-white rounded-2xl border-2 border-dashed border-gray-300 p-8">
-          <div className="text-center border-b border-dashed border-gray-300 pb-5 mb-6">
-            <p className="text-xs font-semibold text-gray-500 tracking-widest uppercase">
-              Application Receipt
-            </p>
-            <p className="text-2xl font-bold text-[#0b3d91] mt-2">
-              {applicationId || 'Not available'}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <Receipt label="Service" value={serviceName} icon={FileText} />
-            <Receipt label="Applicant" value={applicantName} icon={Building2} />
-            <Receipt label="Status" value={status} icon={CheckCircle2} />
-            <Receipt label="Consent" value="Explicitly granted" icon={Shield} />
-          </div>
-
-          {record?.submitted_at && (
-            <div className="mt-6 pt-5 border-t border-dashed border-gray-300">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Submitted at</p>
-              <p className="font-semibold text-gray-800 mt-1">
-                {new Date(record.submitted_at).toLocaleString('en-IN')}
+        <section className="rounded-2xl border border-green-200 bg-green-50 p-6">
+          <div className="flex gap-3">
+            <CheckCircle2 className="mt-0.5 shrink-0 text-green-700" size={24} />
+            <div>
+              <h2 className="text-lg font-bold text-green-950">The demo submission completed</h2>
+              <p className="mt-1 text-sm leading-6 text-green-900">
+                The local mock portal recorded this application. No information was sent to a real government service, and this reference is not an official application number.
               </p>
             </div>
-          )}
-        </div>
+          </div>
+        </section>
 
-        <div className="mt-8 flex justify-end">
-          <button
-            onClick={() => navigate('/status')}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 text-white font-semibold"
-          >
-            Track Application <ArrowRight size={18} />
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 flex items-center gap-2 font-bold text-slate-900">
+            <FileText size={18} className="text-blue-700" /> Demo receipt details
+          </h2>
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <ReceiptRow label="Demo reference" value={application.id} mono />
+            <ReceiptRow label="Service" value={application.service || 'Not available'} />
+            <ReceiptRow label="Applicant" value={applicantName} />
+            <ReceiptRow label="Demo status" value="SUBMITTED" />
+            <ReceiptRow label="Recorded at" value={formatTimestamp(application.submittedAt)} />
+          </dl>
+        </section>
+
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="font-bold text-slate-900">Documents included in this demo</h2>
+          {documents.length ? (
+            <ul className="mt-3 divide-y divide-slate-100">
+              {documents.map((item) => (
+                <li key={item.id} className="flex flex-wrap justify-between gap-2 py-3 text-sm">
+                  <span className="font-medium text-slate-800">{item.filename}</span>
+                  <span className="text-slate-600">{formatLabel(item.document_type)} · readable</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-slate-600">No document details are available in this browser session.</p>
+          )}
+        </section>
+
+        <div className="mt-6 flex flex-col-reverse justify-between gap-3 sm:flex-row">
+          <button type="button" onClick={() => navigate('/')} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <ArrowLeft size={16} /> Back to home
           </button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button type="button" onClick={downloadReceipt} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <Download size={16} /> Download demo receipt
+            </button>
+            <button type="button" onClick={() => navigate('/status')} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-800 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-900">
+              View recorded status <ArrowRight size={16} />
+            </button>
+          </div>
         </div>
-      </main>
+      </div>
+    </main>
+  );
+}
+
+function ReceiptRow({ label, value, mono }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
+      <dd className={`mt-1 break-words text-sm font-semibold text-slate-900 ${mono ? 'font-mono' : ''}`}>{value}</dd>
     </div>
   );
 }
 
-function Receipt({ label, value, icon: Icon }) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center flex-shrink-0">
-        <Icon size={16} />
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
-        <p className="text-sm font-bold text-gray-800 mt-0.5">{value}</p>
-      </div>
-    </div>
-  );
+function formatLabel(value) {
+  return String(value || '')
+    .split('_')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function formatTimestamp(value) {
+  if (!value) return 'Time unavailable';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? 'Time unavailable'
+    : parsed.toLocaleString('en-IN');
 }
 
 export default GovernmentPortal;

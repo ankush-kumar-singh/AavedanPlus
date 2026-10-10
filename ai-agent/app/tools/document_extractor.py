@@ -39,12 +39,12 @@ DOCUMENT_EXTRACTION_FIELDS = {
     ],
     "salary_slip": [
         "applicant_name",
-        "annual_income",
+        "monthly_income",
         "income_source"
     ],
     "pension_slip": [
         "applicant_name",
-        "annual_income",
+        "monthly_income",
         "income_source"
     ],
     "form_16": [
@@ -93,6 +93,12 @@ DOCUMENT_EXTRACTION_FIELDS = {
         "parent_name"
     ],
     "hospital_birth_record": [
+        "child_name",
+        "date_of_birth",
+        "place_of_birth",
+        "parent_name"
+    ],
+    "birth_certificate": [
         "child_name",
         "date_of_birth",
         "place_of_birth",
@@ -270,7 +276,8 @@ def extract_after_label(
 
 
 def extract_salary_data(
-    text: str
+    text: str,
+    document_type: str,
 ) -> dict:
 
     data = {}
@@ -285,36 +292,27 @@ def extract_salary_data(
             "applicant_name"
         ] = employee_name
 
-    gross_salary = extract_after_label(
-        text,
-        "Gross Salary"
-    )
-
-    if gross_salary:
-
-        data[
-            "annual_income"
-        ] = (
-            f"{gross_salary} monthly gross salary"
-        )
-
+    if document_type in {"salary_slip", "pension_slip"}:
+        gross_salary = extract_after_label(text, "Gross Salary")
+        amount_text = gross_salary
+        if not amount_text:
+            amount_text = extract_after_label(text, "Net Salary")
+        if not amount_text:
+            amount_text = extract_after_label(text, "Monthly Pension")
+        if amount_text:
+            amount = re.search(r"\d[\d,]*(?:\.\d{1,2})?", amount_text)
+            if amount:
+                data["monthly_income"] = amount.group(0).replace(",", "")
     else:
-
-        salary_matches = re.findall(
-            r"(?:Basic Salary|House Rent Allowance|"
-            r"Other Allowance|Gross Salary|Net Salary)"
-            r"\s+([\d,]+)",
-            text,
-            re.IGNORECASE
-        )
-
-        if salary_matches:
-
-            data[
-                "annual_income"
-            ] = (
-                f"{salary_matches[-1]} monthly salary"
-            )
+        annual_amount = None
+        for label in ("Total Income", "Gross Total Income", "Annual Income", "Gross Salary"):
+            annual_amount = extract_after_label(text, label)
+            if annual_amount:
+                break
+        if annual_amount:
+            amount = re.search(r"\d[\d,]*(?:\.\d{1,2})?", annual_amount)
+            if amount:
+                data["annual_income"] = amount.group(0).replace(",", "")
 
     income_source = None
 
@@ -559,9 +557,7 @@ def extract_document_data(
         "income_tax_return"
     }:
 
-        return extract_salary_data(
-            text
-        )
+        return extract_salary_data(text, document_type)
 
     if document_type in {
         "self_declaration",

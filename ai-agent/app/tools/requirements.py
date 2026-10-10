@@ -24,7 +24,8 @@ SERVICE_REQUIREMENTS = {
                     "water_bill",
                     "telephone_bill",
                     "rent_agreement"
-                ]
+                ],
+                "required": False
             },
             {
                 "key": "income_proof",
@@ -43,7 +44,8 @@ SERVICE_REQUIREMENTS = {
                 "accepted_documents": [
                     "self_declaration",
                     "affidavit"
-                ]
+                ],
+                "required": False
             }
         ]
     },
@@ -73,7 +75,8 @@ SERVICE_REQUIREMENTS = {
                     "domicile_certificate",
                     "electricity_bill",
                     "land_record"
-                ]
+                ],
+                "required": False
             },
             {
                 "key": "caste_proof",
@@ -81,6 +84,7 @@ SERVICE_REQUIREMENTS = {
                 "accepted_documents": [
                     "previous_caste_certificate",
                     "parent_caste_certificate",
+                    "caste_certificate",
                     "land_record",
                     "government_record"
                 ]
@@ -91,7 +95,8 @@ SERVICE_REQUIREMENTS = {
                 "accepted_documents": [
                     "self_declaration",
                     "affidavit"
-                ]
+                ],
+                "required": False
             }
         ]
     },
@@ -132,7 +137,8 @@ SERVICE_REQUIREMENTS = {
                     "property_tax_receipt",
                     "residence_certificate",
                     "domicile_certificate"
-                ]
+                ],
+                "required": False
             }
         ]
     },
@@ -161,7 +167,8 @@ SERVICE_REQUIREMENTS = {
                     "electricity_bill",
                     "water_bill",
                     "rent_agreement"
-                ]
+                ],
+                "required": False
             },
             {
                 "key": "income_proof",
@@ -180,7 +187,8 @@ SERVICE_REQUIREMENTS = {
                     "land_record",
                     "property_document",
                     "property_tax_receipt"
-                ]
+                ],
+                "required": False
             },
             {
                 "key": "declaration",
@@ -188,7 +196,8 @@ SERVICE_REQUIREMENTS = {
                 "accepted_documents": [
                     "self_declaration",
                     "affidavit"
-                ]
+                ],
+                "required": False
             }
         ]
     },
@@ -212,7 +221,8 @@ SERVICE_REQUIREMENTS = {
                 "accepted_documents": [
                     "hospital_birth_record",
                     "birth_register_record",
-                    "hospital_discharge_summary"
+                    "hospital_discharge_summary",
+                    "birth_certificate"
                 ]
             },
             {
@@ -223,7 +233,8 @@ SERVICE_REQUIREMENTS = {
                     "voter_id",
                     "ration_card",
                     "electricity_bill"
-                ]
+                ],
+                "required": False
             }
         ]
     },
@@ -257,7 +268,8 @@ SERVICE_REQUIREMENTS = {
                     "income_certificate",
                     "salary_slip",
                     "income_tax_return"
-                ]
+                ],
+                "required": False
             },
             {
                 "key": "bank_proof",
@@ -266,7 +278,8 @@ SERVICE_REQUIREMENTS = {
                     "bank_passbook",
                     "bank_statement",
                     "cancelled_cheque"
-                ]
+                ],
+                "required": False
             },
             {
                 "key": "category_proof",

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/useAuth';
+import { useLanguage } from '../context/useLanguage';
 
 const UserMenu = () => {
   const { user, logout } = useAuth();

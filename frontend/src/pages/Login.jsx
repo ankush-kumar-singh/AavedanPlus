@@ -9,7 +9,7 @@ import {
   EyeOff,
   ArrowRight,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import loginBg from '../assets/login.png';
 
 function Login() {
@@ -50,7 +50,7 @@ function Login() {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -58,8 +58,10 @@ function Login() {
     if (mode === 'register') {
       if (!form.name.trim()) return setError('Enter full name');
       if (!form.email.trim()) return setError('Enter email');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
+        return setError('Enter a valid email address');
       if (form.mobile.length !== 10) return setError('Mobile 10 digits');
-      if (form.password.length < 6) return setError('Password 6+ chars');
+      if (form.password.length < 8) return setError('Password must be at least 8 characters');
       if (form.password !== form.confirmPassword)
         return setError('Passwords do not match');
     } else {
@@ -68,27 +70,31 @@ function Login() {
     }
 
     setLoading(true);
-
-    setTimeout(() => {
-      if (mode === 'register') {
-        const result = register({
+    try {
+      const result = mode === 'register'
+        ? await register({
           name: form.name,
           email: form.email,
           mobile: form.mobile,
           password: form.password,
-        });
-        setLoading(false);
-        if (!result.success) return setError(result.error);
-        setSuccess('Account created!');
-        setTimeout(() => navigate('/'), 800);
-      } else {
-        const result = login({ email: form.email, password: form.password });
-        setLoading(false);
-        if (!result.success) return setError(result.error);
-        setSuccess('Login successful!');
-        setTimeout(() => navigate('/'), 800);
+        }, rememberMe)
+        : await login(
+            { email: form.email, password: form.password },
+            rememberMe
+          );
+
+      if (!result.success) {
+        setError(result.error);
+        return;
       }
-    }, 900);
+
+      setSuccess(mode === 'register' ? 'Account created!' : 'Login successful!');
+      setTimeout(() => navigate('/agent'), 500);
+    } catch {
+      setError('Could not complete sign-in. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -219,8 +225,8 @@ function Login() {
             }}
           >
             {mode === 'login'
-              ? 'Access your government services securely'
-              : 'Register to start using Aavaedan+'}
+              ? 'Sign in to your local prototype account'
+              : 'Create a local demo account in this browser'}
           </p>
         </div>
 
@@ -277,8 +283,8 @@ function Login() {
 
           <InputField
             icon={Mail}
-            placeholder="Username / Mobile Number / Email"
-            type="email"
+            placeholder={mode === 'register' ? 'Email address' : 'Email or mobile number'}
+            type="text"
             value={form.email}
             onChange={(v) => updateForm('email', v)}
           />

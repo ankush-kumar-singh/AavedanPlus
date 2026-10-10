@@ -4,6 +4,7 @@ from typing import TypedDict
 class AgentState(TypedDict, total=False):
     user_id: str
     user_message: str
+    conversation_history: list
 
     service: str
     service_name: str
@@ -13,6 +14,7 @@ class AgentState(TypedDict, total=False):
 
     required_documents: list
     uploaded_documents: list
+    uploaded_document_records: list
     uploaded_file_paths: list
     validated_documents: dict
 

@@ -1,106 +1,243 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useApplication } from '../context/ApplicationContext';
-import { useLanguage } from '../context/LanguageContext';
+import {
+  Bot,
+  Home,
+  FileText,
+  BarChart3,
+  Activity,
+  LogOut,
+  Menu,
+  X,
+} from 'lucide-react';
+import { useLanguage } from '../context/useLanguage';
+import { useAuth } from '../context/useAuth';
 
 const Sidebar = () => {
-  const { resetApplication } = useApplication();
   const { t } = useLanguage();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(true);
 
-  const [applications] = useState([
-    { id: 1, name: 'Income Certificate', date: '07 Oct 2026', status: 'SUCCESS' },
-    { id: 2, name: 'Residence Certificate', date: '05 Oct 2026', status: 'PENDING' },
-    { id: 3, name: 'Caste Certificate', date: '02 Oct 2026', status: 'SUCCESS' },
-  ]);
-
   const navLinks = [
-    { path: '/', labelKey: 'navHome', icon: '🏠' },
-    { path: '/services', labelKey: 'navServices', icon: '📋' },
-    { path: '/status', labelKey: 'navStatus', icon: '📊' },
-    { path: '/audit', labelKey: 'navAudit', icon: '📜' },
+    { path: '/agent', labelKey: 'navChat', icon: Bot },
+    { path: '/', labelKey: 'navHome', icon: Home },
+    { path: '/services', labelKey: 'navServices', icon: FileText },
+    { path: '/status', labelKey: 'navStatus', icon: BarChart3 },
+    { path: '/audit', labelKey: 'navAudit', icon: Activity },
   ];
 
-  const handleNavClick = (path) => {
-    navigate(path);
+  const handleNavClick = (path) => navigate(path);
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
   };
 
-  const handleNewApplication = () => {
-    resetApplication();
-    navigate('/');
-  };
+  const initials = user?.name
+    ? user.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    : 'U';
 
   return (
     <>
+      {/* Open Button */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
           style={{
             position: 'fixed',
-            top: 20,
-            left: 20,
+            top: 16,
+            left: 16,
             zIndex: 1000,
-            padding: '10px 14px',
-            background: '#2563eb',
-            color: 'white',
+            width: 42,
+            height: 42,
+            background: '#0f172a',
+            color: '#fff',
             border: 'none',
             borderRadius: 8,
             cursor: 'pointer',
-            fontSize: 18,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(15,23,42,0.3)',
           }}
         >
-          ☰
+          <Menu size={18} />
         </button>
       )}
 
+      {/* Sidebar */}
       <aside
         style={{
           width: isOpen ? 280 : 0,
           minWidth: isOpen ? 280 : 0,
+          maxWidth: isOpen ? 280 : 0,
           height: '100vh',
+          maxHeight: '100vh',
           background: '#0f172a',
           color: '#e2e8f0',
           display: 'flex',
           flexDirection: 'column',
-          transition: 'all 0.3s ease',
+          transition: 'width 0.25s ease',
           overflow: 'hidden',
           position: 'sticky',
           top: 0,
+          fontFamily:
+            "'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
         }}
       >
-        {/* Header */}
+        {/* HEADER */}
         <div
           style={{
-            padding: '20px 18px',
-            borderBottom: '1px solid #1e293b',
+            padding: '20px 22px 18px',
             display: 'flex',
-            justifyContent: 'space-between',
             alignItems: 'center',
+            justifyContent: 'space-between',
+            flexShrink: 0,
+            borderBottom: '1px solid #1e293b',
           }}
         >
-          <h2 style={{ fontSize: 18, margin: 0, color: '#fff' }}>
-            📋 Aavaedan+
-          </h2>
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 700,
+              color: '#fff',
+              letterSpacing: '-0.2px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 14,
+                fontWeight: 800,
+                color: '#fff',
+              }}
+            >
+              A
+            </div>
+            Aavaedan<span style={{ color: '#10b981' }}>+</span>
+          </div>
+
           <button
             onClick={() => setIsOpen(false)}
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#94a3b8',
+              color: '#64748b',
               cursor: 'pointer',
-              fontSize: 18,
+              padding: 4,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 4,
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#e2e8f0')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
           >
-            ✕
+            <X size={16} />
           </button>
         </div>
 
-        {/* Navigation */}
-        <div style={{ padding: '12px 12px 0' }}>
+        {/* USER CARD */}
+        <div
+          style={{
+            margin: '16px 16px 16px',
+            padding: '12px 14px',
+            background: '#1e293b',
+            border: '1px solid #334155',
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: 12,
+              flexShrink: 0,
+            }}
+          >
+            {initials}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#f1f5f9',
+                margin: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {user?.name || 'Citizen'}
+            </p>
+            <p
+              style={{
+                fontSize: 10,
+                color: '#94a3b8',
+                margin: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {user?.email || 'Not logged in'}
+            </p>
+          </div>
+        </div>
+
+        {/* NAVIGATION */}
+        <nav
+          style={{
+            flex: 1,
+            padding: '0 12px',
+            overflowY: 'auto',
+            minHeight: 0,
+          }}
+        >
+          {/* Section Label */}
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: '#64748b',
+              textTransform: 'uppercase',
+              letterSpacing: 1,
+              padding: '10px 12px 8px',
+            }}
+          >
+            Menu
+          </div>
+
           {navLinks.map((link) => {
             const isActive = location.pathname === link.path;
+            const Icon = link.icon;
             return (
               <button
                 key={link.path}
@@ -108,140 +245,119 @@ const Sidebar = () => {
                 style={{
                   width: '100%',
                   padding: '11px 14px',
-                  marginBottom: 6,
-                  background: isActive ? '#2563eb' : 'transparent',
+                  marginBottom: 2,
+                  background: isActive ? '#1e293b' : 'transparent',
                   color: isActive ? '#fff' : '#cbd5e1',
                   border: 'none',
-                  borderRadius: 10,
+                  borderLeft: isActive
+                    ? '2px solid #3b82f6'
+                    : '2px solid transparent',
+                  borderRadius: 6,
                   cursor: 'pointer',
-                  fontWeight: isActive ? 600 : 500,
-                  fontSize: 14,
+                  fontWeight: isActive ? 700 : 500,
+                  fontSize: 13,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 12,
                   textAlign: 'left',
-                  transition: 'background 0.2s',
+                  transition: 'all 0.15s',
+                  fontFamily: 'inherit',
                 }}
                 onMouseEnter={(e) => {
-                  if (!isActive) e.currentTarget.style.background = '#1e293b';
+                  if (!isActive) {
+                    e.currentTarget.style.background = '#1e293b';
+                    e.currentTarget.style.color = '#fff';
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  if (!isActive)
+                  if (!isActive) {
                     e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#cbd5e1';
+                  }
                 }}
               >
-                <span style={{ fontSize: 16 }}>{link.icon}</span>
+                <Icon size={16} />
                 {t(link.labelKey)}
               </button>
             );
           })}
-        </div>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: '#1e293b', margin: '12px 16px' }} />
+          <div
+            style={{
+              height: 1,
+              background: '#1e293b',
+              margin: '16px 4px',
+            }}
+          />
 
-        {/* New Application */}
-        <div style={{ padding: '0 16px 12px' }}>
+          {/* Logout */}
           <button
-            onClick={handleNewApplication}
+            onClick={handleLogout}
             style={{
               width: '100%',
-              padding: '12px 16px',
-              background: '#2563eb',
-              color: 'white',
+              padding: '11px 14px',
+              background: 'transparent',
+              color: '#cbd5e1',
               border: 'none',
-              borderRadius: 10,
+              borderRadius: 6,
               cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: 14,
+              fontWeight: 500,
+              fontSize: 13,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
+              gap: 12,
+              textAlign: 'left',
+              transition: 'all 0.15s',
+              fontFamily: 'inherit',
+              marginBottom: 2,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#7f1d1d33';
+              e.currentTarget.style.color = '#f87171';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = '#cbd5e1';
             }}
           >
-            ➕ {t('newApplication')}
+            <LogOut size={16} />
+            {t('logout') || 'Logout'}
           </button>
-        </div>
+        </nav>
 
-        {/* Recent */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px' }}>
-          <p
-            style={{
-              fontSize: 11,
-              color: '#64748b',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              margin: '12px 8px 8px',
-            }}
-          >
-            {t('recent')}
-          </p>
-
-          {applications.map((app) => (
-            <div
-              key={app.id}
-              onClick={() => navigate('/status')}
-              style={{
-                padding: '12px 14px',
-                borderRadius: 10,
-                marginBottom: 8,
-                background: '#1e293b',
-                cursor: 'pointer',
-                transition: 'background 0.2s',
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = '#334155')
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = '#1e293b')
-              }
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 4,
-                }}
-              >
-                <span
-                  style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}
-                >
-                  {app.name}
-                </span>
-                <span
-                  style={{
-                    fontSize: 10,
-                    padding: '2px 8px',
-                    borderRadius: 6,
-                    background:
-                      app.status === 'SUCCESS' ? '#065f46' : '#78350f',
-                    color: app.status === 'SUCCESS' ? '#6ee7b7' : '#fcd34d',
-                    fontWeight: 600,
-                  }}
-                >
-                  {app.status === 'SUCCESS' ? t('success') : t('pending')}
-                </span>
-              </div>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                {app.date}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Footer */}
+        {/* FOOTER */}
         <div
           style={{
-            padding: 16,
+            padding: '16px 22px',
             borderTop: '1px solid #1e293b',
-            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: 11,
             color: '#64748b',
-            textAlign: 'center',
+            flexShrink: 0,
           }}
         >
-          {t('aavaedanVersion')}
+          <span style={{ fontWeight: 600 }}>Aavaedan+ v1.0</span>
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              color: '#10b981',
+              fontWeight: 700,
+            }}
+          >
+            <div
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: '#10b981',
+              }}
+            />
+            Live
+          </span>
         </div>
       </aside>
     </>

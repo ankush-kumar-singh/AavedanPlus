@@ -1,4 +1,5 @@
 import os
+import re
 
 import fitz
 import pytesseract
@@ -119,6 +120,10 @@ DOCUMENT_ALIASES = {
         "birth record",
         "hospital record"
     ],
+    "birth_certificate": [
+        "birth certificate",
+        "birth cert"
+    ],
     "birth_register_record": [
         "birth register",
         "birth register record"
@@ -225,47 +230,93 @@ def extract_pdf_text_with_ocr(pdf_path: str) -> str:
 def detect_document_type_from_text(text: str) -> str:
     normalized_text = normalize_text(text)
 
-    matches = []
+    priority = [
+        "previous_caste_certificate",
+        "parent_caste_certificate",
+        "birth_register_record",
+        "hospital_birth_record",
+        "hospital_discharge_summary",
+        "birth_certificate",
+        "caste_certificate",
+        "ews_certificate",
+        "income_certificate",
+        "residence_certificate",
+        "domicile_certificate",
+        "salary_slip",
+        "pension_slip",
+        "income_tax_return",
+        "form_16",
+        "self_declaration",
+        "affidavit",
+        "aadhaar",
+        "voter_id",
+        "pan",
+        "passport",
+        "driving_license",
+        "ration_card",
+        "electricity_bill",
+        "water_bill",
+        "telephone_bill",
+        "rent_agreement",
+        "land_record",
+        "property_tax_receipt",
+        "property_document",
+        "marksheet",
+        "degree_certificate",
+        "school_certificate",
+        "bonafide_certificate",
+        "bank_passbook",
+        "bank_statement",
+        "cancelled_cheque",
+        "government_record",
+    ]
+
+    # Synthetic and real forms often label the document type directly. Prefer
+    # that field so incidental wording in disclaimers cannot override it.
+    for line in text.splitlines():
+        type_field = re.match(
+            r"\s*(?:document\s+type|type\s+of\s+document)\s*:\s*(.+)",
+            line,
+            flags=re.IGNORECASE,
+        )
+        if not type_field:
+            continue
+        normalized_type_field = normalize_text(type_field.group(1))
+        explicit_matches = [
+            document_type
+            for document_type, aliases in DOCUMENT_ALIASES.items()
+            if any(
+                normalize_text(alias) in normalized_type_field
+                for alias in aliases
+            )
+        ]
+        if explicit_matches:
+            priority_rank = {name: index for index, name in enumerate(priority)}
+            return min(
+                explicit_matches,
+                key=lambda document_type: priority_rank.get(document_type, len(priority)),
+            )
+
+    matches = {}
 
     for document_type, aliases in DOCUMENT_ALIASES.items():
         for alias in aliases:
             normalized_alias = normalize_text(alias)
 
             if normalized_alias in normalized_text:
-                matches.append(document_type)
-                break
+                matches[document_type] = max(
+                    matches.get(document_type, 0),
+                    len(normalized_alias),
+                )
 
     if not matches:
         return "unknown"
-
-    priority = [
-        "aadhaar",
-        "salary_slip",
-        "self_declaration",
-        "affidavit",
-        "income_certificate",
-        "caste_certificate",
-        "ews_certificate",
-        "residence_certificate",
-        "domicile_certificate",
-        "electricity_bill",
-        "water_bill",
-        "voter_id",
-        "pan",
-        "passport",
-        "driving_license",
-        "ration_card",
-        "marksheet",
-        "bank_passbook",
-        "bank_statement",
-        "land_record"
-    ]
 
     for document_type in priority:
         if document_type in matches:
             return document_type
 
-    return matches[0]
+    return next(iter(matches))
 
 
 def validate_pdf_document(pdf_path: str) -> dict:

@@ -10,17 +10,20 @@ FORM_SCHEMAS = {
             {
                 "key": "date_of_birth",
                 "label": "Date of Birth",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "gender",
                 "label": "Gender",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "address",
                 "label": "Address",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "annual_income",
@@ -30,12 +33,14 @@ FORM_SCHEMAS = {
             {
                 "key": "income_source",
                 "label": "Income Source",
-                "source": "income"
+                "source": "income",
+                "required": False,
             },
             {
                 "key": "declaration",
                 "label": "Declaration",
-                "source": "declaration"
+                "source": "declaration",
+                "required": False,
             }
         ]
     },
@@ -51,17 +56,20 @@ FORM_SCHEMAS = {
             {
                 "key": "date_of_birth",
                 "label": "Date of Birth",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "gender",
                 "label": "Gender",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "address",
                 "label": "Address",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "caste",
@@ -71,12 +79,14 @@ FORM_SCHEMAS = {
             {
                 "key": "caste_document",
                 "label": "Caste Supporting Document",
-                "source": "caste"
+                "source": "caste",
+                "required": False,
             },
             {
                 "key": "declaration",
                 "label": "Declaration",
-                "source": "declaration"
+                "source": "declaration",
+                "required": False,
             }
         ]
     },
@@ -92,7 +102,8 @@ FORM_SCHEMAS = {
             {
                 "key": "date_of_birth",
                 "label": "Date of Birth",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "address",
@@ -102,12 +113,14 @@ FORM_SCHEMAS = {
             {
                 "key": "residence_proof",
                 "label": "Residence Proof",
-                "source": "residence"
+                "source": "residence",
+                "required": False,
             },
             {
                 "key": "declaration",
                 "label": "Declaration",
-                "source": "declaration"
+                "source": "declaration",
+                "required": False,
             }
         ]
     },
@@ -123,12 +136,14 @@ FORM_SCHEMAS = {
             {
                 "key": "date_of_birth",
                 "label": "Date of Birth",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "address",
                 "label": "Address",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "annual_income",
@@ -138,12 +153,14 @@ FORM_SCHEMAS = {
             {
                 "key": "asset_details",
                 "label": "Asset Details",
-                "source": "assets"
+                "source": "assets",
+                "required": False,
             },
             {
                 "key": "declaration",
                 "label": "Declaration",
-                "source": "declaration"
+                "source": "declaration",
+                "required": False,
             }
         ]
     },
@@ -174,7 +191,8 @@ FORM_SCHEMAS = {
             {
                 "key": "address",
                 "label": "Address",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             }
         ]
     },
@@ -190,12 +208,14 @@ FORM_SCHEMAS = {
             {
                 "key": "date_of_birth",
                 "label": "Date of Birth",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "address",
                 "label": "Address",
-                "source": "identity"
+                "source": "identity",
+                "required": False,
             },
             {
                 "key": "education_details",
@@ -205,17 +225,20 @@ FORM_SCHEMAS = {
             {
                 "key": "annual_income",
                 "label": "Annual Income",
-                "source": "income"
+                "source": "income",
+                "required": False,
             },
             {
                 "key": "bank_account",
                 "label": "Bank Account",
-                "source": "bank"
+                "source": "bank",
+                "required": False,
             },
             {
                 "key": "category",
                 "label": "Category",
-                "source": "category"
+                "source": "category",
+                "required": False
             }
         ]
     }
@@ -246,6 +269,7 @@ def create_empty_form(service: str) -> dict:
             "label": field["label"],
             "value": None,
             "source": field["source"],
+            "required": field.get("required", True),
             "status": "MISSING"
         }
 

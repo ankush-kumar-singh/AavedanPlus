@@ -1,3 +1,6 @@
+import logging
+import re
+
 from langgraph.graph import StateGraph, START, END
 
 from app.state import AgentState
@@ -11,7 +14,7 @@ from app.tools.requirements import (
     get_service_name,
     get_supported_services
 )
-from app.tools.documents import validate_documents
+from app.tools.documents import DOCUMENT_ALIASES, normalize_text, validate_documents
 from app.tools.submission import submit_application
 from app.tools.forms import fill_form as build_form
 from app.tools.document_extractor import (
@@ -20,6 +23,46 @@ from app.tools.document_extractor import (
 
 
 MAX_RETRIES = 2
+logger = logging.getLogger(__name__)
+
+
+def mentions_unconfigured_document(response: str, state: AgentState) -> bool:
+    if state.get("current_step") != "DOCUMENTS_PENDING":
+        return False
+
+    validation = state.get("validated_documents", {})
+    allowed_types = {
+        document_type
+        for item in validation.get("missing_documents", [])
+        if isinstance(item, dict)
+        for document_type in item.get("accepted_documents", [])
+    }
+    allowed_types.update(state.get("uploaded_documents", []))
+    if state.get("service"):
+        allowed_types.add(state["service"])
+
+    normalized_response = re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        normalize_text(response),
+    ).strip()
+    padded_response = f" {normalized_response} "
+
+    for document_type, aliases in DOCUMENT_ALIASES.items():
+        if document_type in allowed_types:
+            continue
+        for alias in aliases:
+            normalized_alias = re.sub(
+                r"[^a-z0-9]+",
+                " ",
+                normalize_text(alias),
+            ).strip()
+            if len(normalized_alias) < 3:
+                continue
+            if f" {normalized_alias} " in padded_response:
+                return True
+
+    return False
 
 
 def clean_llm_response(
@@ -46,6 +89,28 @@ def generate_natural_response(
     fallback: str
 ) -> str:
 
+    if state.get("current_step") == "FORM_INCOMPLETE":
+        return fallback
+
+    validation = state.get("validated_documents", {})
+    missing_document_guidance = [
+        {
+            "requirement": item.get("label"),
+            "choose_one_of": [
+                document_type.replace("_", " ").title()
+                for document_type in item.get("accepted_documents", [])
+            ],
+        }
+        for item in validation.get("missing_documents", [])
+        if isinstance(item, dict) and item.get("label")
+    ]
+    form_fields = state.get("form_data", {}).get("fields", {})
+    missing_required_fields = [
+        field.get("label", key.replace("_", " ").title())
+        for key, field in form_fields.items()
+        if field.get("required", True) and not str(field.get("value") or "").strip()
+    ]
+
     state_summary = {
         "service": state.get(
             "service"
@@ -56,6 +121,10 @@ def generate_natural_response(
         "current_step": state.get(
             "current_step"
         ),
+        "recent_conversation": state.get(
+            "conversation_history",
+            []
+        )[-8:],
         "required_documents": state.get(
             "required_documents",
             []
@@ -64,6 +133,8 @@ def generate_natural_response(
             "validated_documents",
             {}
         ),
+        "missing_required_document_guidance": missing_document_guidance,
+        "missing_required_fields": missing_required_fields,
         "application_status": state.get(
             "application_status"
         ),
@@ -109,10 +180,14 @@ def generate_natural_response(
     )
 )}
 
-If the verified state is insufficient to safely generate a response,
-use this fallback message:
+Use the verified state to answer the citizen's latest message directly.
+Write a natural response in your own words; do not copy a canned template.
+If the state does not answer the question, say what is unknown and ask a
+useful follow-up instead of guessing.
 
-{fallback}
+Never invent government services, documents, requirements,
+application IDs, statuses, or user information.
+Only use information present in the verified state.
 """
 
     try:
@@ -126,9 +201,17 @@ use this fallback message:
         )
 
         if content:
+
+            if mentions_unconfigured_document(content, state):
+                logger.warning(
+                    "Discarding a documents-pending response that mentioned an unconfigured document type"
+                )
+                return fallback
+
             return content
 
     except Exception:
+        logger.exception("Natural-language response generation failed; using safe fallback")
         pass
 
     return fallback
@@ -138,31 +221,38 @@ def understand_request(
     state: AgentState
 ):
 
-    if state.get(
+    existing_service = state.get(
         "service"
-    ):
+    )
 
-        service = state[
-            "service"
-        ]
+    if existing_service in get_supported_services():
 
-        if service in get_supported_services():
+        return {
+            "service":
+                existing_service,
 
-            return {
-                "service": service,
-                "service_name": get_service_name(
-                    service
+            "service_name":
+                get_service_name(
+                    existing_service
                 ),
-                "current_step":
-                    "SERVICE_IDENTIFIED",
-                "completed_steps": [
-                    "UNDERSTAND_REQUEST"
-                ]
-            }
 
-    user_message = state[
-        "user_message"
-    ]
+            "current_step":
+                state.get(
+                    "current_step",
+                    "SERVICE_IDENTIFIED"
+                ),
+
+            "completed_steps":
+                state.get(
+                    "completed_steps",
+                    []
+                )
+        }
+
+    user_message = state.get(
+        "user_message",
+        ""
+    )
 
     supported_services = "\n".join(
         f"- {service_id}: {name}"
@@ -209,23 +299,32 @@ unknown
         if service_id in service:
 
             return {
-                "service": service_id,
+                "service":
+                    service_id,
+
                 "service_name":
                     get_service_name(
                         service_id
                     ),
+
                 "current_step":
                     "SERVICE_IDENTIFIED",
+
                 "completed_steps": [
                     "UNDERSTAND_REQUEST"
                 ]
             }
 
     return {
-        "service": "unknown",
-        "service_name": "Unknown Service",
+        "service":
+            "unknown",
+
+        "service_name":
+            "Unknown Service",
+
         "current_step":
             "SERVICE_NOT_SUPPORTED",
+
         "completed_steps": [
             "UNDERSTAND_REQUEST"
         ]
@@ -235,6 +334,13 @@ unknown
 def route_after_understanding(
     state: AgentState
 ):
+
+    if state.get("current_step") in {
+        "SUBMITTED",
+        "HUMAN_ESCALATION"
+    }:
+
+        return "terminal"
 
     if state.get(
         "service"
@@ -260,8 +366,10 @@ def get_requirements(
     return {
         "required_documents":
             required_documents,
+
         "current_step":
             "DOCUMENTS_PENDING",
+
         "completed_steps": (
             state.get(
                 "completed_steps",
@@ -310,8 +418,10 @@ def validate_documents_node(
     return {
         "validated_documents":
             validation,
+
         "current_step":
             current_step,
+
         "completed_steps": (
             state.get(
                 "completed_steps",
@@ -361,8 +471,10 @@ def extract_document_data_node(
     return {
         "extracted_data":
             extracted_data,
+
         "current_step":
             "DATA_EXTRACTED",
+
         "completed_steps": (
             state.get(
                 "completed_steps",
@@ -393,11 +505,28 @@ def fill_form(
         extracted_data
     )
 
+    previous_form = state.get("form_data", {})
+    if previous_form.get("service") == service:
+        previous_fields = previous_form.get("fields", {})
+        for field_key, field in form_data.get("fields", {}).items():
+            previous_field = previous_fields.get(field_key, {})
+            if previous_field.get("status") == "USER_PROVIDED":
+                field["value"] = previous_field.get("value")
+                field["status"] = "USER_PROVIDED"
+
+    missing_required_fields = [
+        field_key
+        for field_key, field in form_data.get("fields", {}).items()
+        if field.get("required", True) and not str(field.get("value") or "").strip()
+    ]
+
     return {
         "form_data":
             form_data,
+
         "current_step":
-            "FORM_FILLED",
+            "FORM_INCOMPLETE" if missing_required_fields else "FORM_FILLED",
+
         "completed_steps": (
             state.get(
                 "completed_steps",
@@ -408,6 +537,12 @@ def fill_form(
             ]
         )
     }
+
+
+def route_after_fill_form(state: AgentState):
+    if state.get("current_step") == "FORM_INCOMPLETE":
+        return "incomplete"
+    return "consent"
 
 
 def request_consent(
@@ -421,6 +556,7 @@ def request_consent(
         return {
             "current_step":
                 "SUBMITTING",
+
             "completed_steps": (
                 state.get(
                     "completed_steps",
@@ -435,12 +571,16 @@ def request_consent(
     return {
         "consent_required":
             True,
+
         "consent_action":
             "SUBMIT_APPLICATION",
+
         "consent_granted":
             False,
+
         "current_step":
             "WAITING_CONSENT",
+
         "completed_steps": (
             state.get(
                 "completed_steps",
@@ -500,12 +640,19 @@ def submit_to_portal(
                 result[
                     "application_id"
                 ],
+
             "application_status":
                 "SUBMITTED",
+
+            "submitted_at":
+                result.get("submitted_at"),
+
             "submission_attempts":
                 attempt,
+
             "current_step":
                 "SUBMITTED",
+
             "completed_steps": (
                 state.get(
                     "completed_steps",
@@ -520,6 +667,7 @@ def submit_to_portal(
     return {
         "submission_attempts":
             attempt,
+
         "retry_count": (
             state.get(
                 "retry_count",
@@ -527,14 +675,18 @@ def submit_to_portal(
             )
             + 1
         ),
+
         "last_error":
             result[
                 "error"
             ],
+
         "application_status":
             "FAILED",
+
         "current_step":
             "RETRYING",
+
         "completed_steps": (
             state.get(
                 "completed_steps",
@@ -566,15 +718,19 @@ def handle_retry(
     return {
         "escalated":
             True,
+
         "escalation_reason":
             state.get(
                 "last_error",
                 "Application submission failed repeatedly."
             ),
+
         "current_step":
             "HUMAN_ESCALATION",
+
         "application_status":
             "HUMAN_ESCALATION",
+
         "completed_steps": (
             state.get(
                 "completed_steps",
@@ -621,6 +777,11 @@ def generate_response(
         "current_step"
     )
 
+    service_name = state.get(
+        "service_name",
+        "application"
+    )
+
     if current_step == (
         "SERVICE_NOT_SUPPORTED"
     ):
@@ -655,19 +816,21 @@ def generate_response(
         if missing:
 
             fallback = (
-                "Your application is not ready yet. "
+                f"For your {service_name}, "
                 "I still need: "
                 + ", ".join(
                     missing
                 )
-                + "."
+                + ". "
+                "Please provide the next document."
             )
 
         else:
 
             fallback = (
-                "I still need some required "
-                "documents before we can continue."
+                f"For your {service_name}, "
+                "some required documents are still "
+                "missing. Please provide the next document."
             )
 
     elif current_step == (
@@ -675,11 +838,11 @@ def generate_response(
     ):
 
         fallback = (
-            f"I've checked your documents for "
-            f"the {state.get('service_name', 'application')}. "
-            "All required documents are available. "
-            "Your application is ready for submission. "
-            "Would you like me to submit it?"
+            f"All required documents for your "
+            f"{service_name} match the example requirements. "
+            "Your demo form is ready. If you approve, this prototype will save "
+            "a local demo record; it will not contact a government agency. "
+            "Reply YES if you want to continue."
         )
 
     elif current_step == (
@@ -687,10 +850,8 @@ def generate_response(
     ):
 
         fallback = (
-            f"Your "
-            f"{state.get('service_name', 'application')} "
-            "has been submitted successfully. "
-            f"Your application ID is "
+            f"A local demo record for your {service_name} was saved. "
+            "This is not an official application. Your demo reference is "
             f"{state.get('application_id')}."
         )
 
@@ -699,9 +860,8 @@ def generate_response(
     ):
 
         fallback = (
-            "The government portal is temporarily "
-            "unavailable. I'll retry the submission "
-            "automatically."
+            "The local demo portal simulated a temporary failure. I'll retry "
+            "saving the demo record automatically. No government service was contacted."
         )
 
     elif current_step == (
@@ -709,16 +869,61 @@ def generate_response(
     ):
 
         fallback = (
-            "I couldn't complete the submission "
-            "after multiple attempts. I'm escalating "
-            "this application to a human helper."
+            "I couldn't save the demo record after multiple attempts. No "
+            "government application was submitted and no human helper was contacted. "
+            "You can review the form and try again later."
         )
+
+    elif current_step == (
+        "FORM_READY"
+    ):
+
+        fallback = (
+            f"The uploaded PDFs for your {service_name} match the example "
+            "document types and passed readability checks. "
+            "I'm preparing your application form."
+        )
+
+    elif current_step == (
+        "DATA_EXTRACTED"
+    ):
+
+        fallback = (
+            f"I've extracted available information "
+            f"from the uploaded documents for the "
+            f"{service_name}. I'm preparing the form."
+        )
+
+    elif current_step == (
+        "FORM_FILLED"
+    ):
+
+        fallback = (
+            f"Your {service_name} demo form "
+            "has been prepared and is ready for your review."
+        )
+
+    elif current_step == "FORM_INCOMPLETE":
+        form_fields = state.get("form_data", {}).get("fields", {})
+        missing_fields = [
+            field.get("label", key.replace("_", " ").title())
+            for key, field in form_fields.items()
+            if field.get("required", True) and not str(field.get("value") or "").strip()
+        ]
+        if missing_fields:
+            fallback = (
+                f"I prepared your {service_name} form in this chat. I could not read "
+                f"{missing_fields[0]} from the documents. Please tell me just that detail here. "
+                "I will ask for another required detail only if one remains; optional fields can be left blank."
+            )
+        else:
+            fallback = f"Your {service_name} form is ready to review in this chat."
 
     else:
 
         fallback = (
-            "I've processed your request and I'm "
-            "ready to continue with your application."
+            f"I'm ready to continue preparing your "
+            f"{service_name} demo application."
         )
 
     response = generate_natural_response(
@@ -795,7 +1000,11 @@ workflow.add_conditional_edges(
     {
         "continue":
             "get_requirements",
+
         "unsupported":
+            "generate_response",
+
+        "terminal":
             "generate_response"
     }
 )
@@ -813,6 +1022,7 @@ workflow.add_conditional_edges(
     {
         "continue":
             "extract_document_data",
+
         "waiting":
             "generate_response"
     }
@@ -825,9 +1035,13 @@ workflow.add_edge(
 )
 
 
-workflow.add_edge(
+workflow.add_conditional_edges(
     "fill_form",
-    "request_consent"
+    route_after_fill_form,
+    {
+        "consent": "request_consent",
+        "incomplete": "generate_response",
+    }
 )
 
 
@@ -837,6 +1051,7 @@ workflow.add_conditional_edges(
     {
         "submit":
             "submit_to_portal",
+
         "wait":
             "generate_response"
     }
@@ -849,6 +1064,7 @@ workflow.add_conditional_edges(
     {
         "done":
             "generate_response",
+
         "retry":
             "handle_retry"
     }
@@ -861,6 +1077,7 @@ workflow.add_conditional_edges(
     {
         "submit":
             "submit_to_portal",
+
         "escalate":
             "generate_response"
     }

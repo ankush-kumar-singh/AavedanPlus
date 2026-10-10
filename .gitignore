@@ -1,0 +1,17 @@
+# Local application data contains applicant information and uploaded documents.
+ai-agent/application_state.sqlite3
+ai-agent/application_state.sqlite3-shm
+ai-agent/application_state.sqlite3-wal
+ai-agent/local_application_records.json
+ai-agent/uploads/
+
+# Python environments and generated files
+ai-agent/.venv/
+ai-agent/.venv-*/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Frontend dependencies and production output
+frontend/node_modules/
+frontend/dist/

@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.graph import agent
@@ -34,11 +35,21 @@ from app.session_store import (
     save_session,
 )
 
-
 app = FastAPI(
-    title="Aavedan+ AI Agent",
-    description="Local prototype for preparing example service applications.",
-    version="1.0.0"
+    title="Aavaedan+ AI Agent",
+    version="1.0.0",
+    description="Local prototype for preparing example service applications."
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -504,6 +515,36 @@ def application_session(user_id: str):
         "uploaded_documents": state.get("uploaded_document_records", []),
         "consent_granted": state.get("consent_granted", False),
         "escalated": state.get("escalated", False),
+    }
+
+@app.get("/admin/applications")
+def admin_applications():
+    import json
+    from pathlib import Path
+
+    records_file = Path("local_application_records.json")
+
+    if not records_file.exists():
+        return {
+            "applications": [],
+            "total": 0
+        }
+
+    try:
+        with records_file.open("r", encoding="utf-8") as f:
+            records = json.load(f)
+    except Exception:
+        return {
+            "applications": [],
+            "total": 0
+        }
+
+    if not isinstance(records, list):
+        records = []
+
+    return {
+        "applications": records,
+        "total": len(records)
     }
 
 
@@ -1081,53 +1122,116 @@ def application_status(
             True,
         **record
     }
-
-
-@app.patch(
-    "/application-status/{application_id}"
-)
-def change_application_status(
+@app.patch("/application-status/{application_id}")
+async def change_application_status(
     application_id: str,
-    status: str
+    request: Request
 ):
+    try:
+        body = await request.json()
+        new_status = body.get("status")
 
-    record = update_application_status(
-        application_id,
-        status
-    )
+        if new_status not in ["APPROVED", "REJECTED"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Status must be APPROVED or REJECTED"
+            )
 
-    if not record:
+        records_file = Path("local_application_records.json")
+
+        if not records_file.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="Application records not found"
+            )
+
+        with records_file.open(
+            "r",
+            encoding="utf-8"
+        ) as f:
+            records = json.load(f)
+
+        if not isinstance(records, list):
+            records = []
+
+        found_record = None
+
+        for record in records:
+            if record.get("application_id") == application_id:
+                found_record = record
+                break
+
+        if found_record is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Application not found"
+            )
+
+        # Update application status
+        found_record["status"] = new_status
+        found_record["application_status"] = new_status
+
+        # Save status history
+        if "status_history" not in found_record:
+            found_record["status_history"] = []
+
+        found_record["status_history"].append({
+            "status": new_status,
+            "timestamp": datetime.now(
+                timezone.utc
+            ).isoformat()
+        })
+
+        # Save updated applications
+        with records_file.open(
+            "w",
+            encoding="utf-8"
+        ) as f:
+            json.dump(
+                records,
+                f,
+                indent=2,
+                ensure_ascii=False
+            )
+
+        # Add audit event
+        try:
+            user_id = found_record.get("user_id")
+
+            if user_id:
+                add_audit_event(
+                    user_id,
+                    "ADMIN",
+                    f"APPLICATION_{new_status}: {application_id}"
+                )
+
+        except Exception as audit_error:
+            print(
+                "AUDIT LOG ERROR:",
+                repr(audit_error)
+            )
 
         return {
-            "success":
-                False,
-            "message":
-                "Application not found or invalid status."
+            "success": True,
+            "message": (
+                "Application approved successfully."
+                if new_status == "APPROVED"
+                else "Application rejected successfully."
+            ),
+            "application_id": application_id,
+            "status": new_status
         }
 
-    return {
-        "success":
-            True,
-        **record
-    }
+    except HTTPException:
+        raise
 
+    except Exception as e:
+        print(
+            "ADMIN STATUS ERROR:",
+            repr(e)
+        )
 
-@app.delete(
-    "/chat/{user_id}"
-)
-def clear_chat(
-    user_id: str
-):
-
-    with SESSIONS_LOCK:
-        previous_state = load_session(user_id)
-        if previous_state:
-            remove_uploaded_files(previous_state)
-        sessions.pop(user_id, None)
-        delete_session(user_id)
-        add_audit_event(user_id, "SYSTEM", "SESSION_CLEARED")
-
-    return {
-        "message":
-            "Conversation cleared."
-    }
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to update application status"
+        )

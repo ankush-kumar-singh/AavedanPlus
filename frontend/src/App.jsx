@@ -8,6 +8,7 @@ import Services from './pages/Services';
 import AgentWorkspace from './pages/AgentWorkspace';
 import ApplicationStatus from './pages/ApplicationStatus';
 import AuditLog from './pages/AuditLog';
+import AdminDashboard from './pages/AdminDashboard';
 import { useAuth } from './context/useAuth';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
     <BrowserRouter>
       <ApplicationProvider key={user?.id || 'anonymous'}>
         <Routes>
+
           {/* Public — Login */}
           <Route path="/login" element={<Login />} />
 
@@ -28,19 +30,62 @@ function App() {
               </ProtectedRoute>
             }
           >
+            {/* Citizen pages */}
             <Route path="/" element={<Home />} />
             <Route path="/agent" element={<AgentWorkspace />} />
             <Route path="/services" element={<Services />} />
-            <Route path="/documents" element={<Navigate to="/agent" replace />} />
-            <Route path="/review" element={<Navigate to="/agent" replace />} />
-            <Route path="/consent" element={<Navigate to="/agent" replace />} />
-            <Route path="/portal" element={<Navigate to="/agent" replace />} />
-            <Route path="/status" element={<ApplicationStatus />} />
-            <Route path="/audit" element={<AuditLog />} />
+
+            {/* Existing workflow redirects */}
+            <Route
+              path="/documents"
+              element={<Navigate to="/agent" replace />}
+            />
+
+            <Route
+              path="/review"
+              element={<Navigate to="/agent" replace />}
+            />
+
+            <Route
+              path="/consent"
+              element={<Navigate to="/agent" replace />}
+            />
+
+            <Route
+              path="/portal"
+              element={<Navigate to="/agent" replace />}
+            />
+
+            {/* Application status */}
+            <Route
+              path="/status"
+              element={<ApplicationStatus />}
+            />
+
+            {/* Activity / Audit */}
+            <Route
+              path="/audit"
+              element={<AuditLog />}
+            />
+
+            {/* Admin Panel */}
+            <Route
+              path="/admin"
+              element={<AdminDashboard />}
+            />
           </Route>
 
           {/* Fallback */}
-          <Route path="*" element={<Navigate to={user ? '/agent' : '/login'} replace />} />
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to={user ? '/agent' : '/login'}
+                replace
+              />
+            }
+          />
+
         </Routes>
       </ApplicationProvider>
     </BrowserRouter>
